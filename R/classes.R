@@ -149,7 +149,7 @@ setReplaceMethod("names", signature(x = "CNV.data"), function(x, value) {
 #' @author Volker Hovestadt \email{conumee@@hovestadt.bio}
 #' @export
 setClass("CNV.analysis", representation(name = "character", date = "character", 
-    anno = "CNV.anno", fit = "list", bin = "list", detail = "list", seg = "list",BAFsnps="data.frame"))
+    anno = "CNV.anno", fit = "list", bin = "list", detail = "list", seg = "list",BAFsnps="data.frame",method.baseline.correction="character"))
 
 #' @rdname CNV.analysis-class
 #' @param object \code{CNV.analysis} object
@@ -188,6 +188,11 @@ setMethod("show", "CNV.analysis", function(object) {
         cat("  @BAFsnps   : unavailable, run CNV.load with MethylSet as input\n", sep = "")
     } else {
         cat("  @BAFsnps   : available (", nrow(object@BAFsnps), " values)\n", sep = "")
+    }
+    if (length(object@method.baseline.correction) == 0) {
+        cat("  @baseline  : method unavailable, run CNV.adjustbaseline\n", sep = "")
+    } else {
+        cat("  @baseline  : method available (", object@method.baseline.correction, ")\n", sep = "")
     }
 })
 

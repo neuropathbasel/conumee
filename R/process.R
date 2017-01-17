@@ -341,22 +341,19 @@ setMethod("CNV.segment_DS", signature(object = "CNV.analysis"), function(object,
 
 
 
-setGeneric("CNV.adjustbaseline", function(object, baseline.method, ...) {
+setGeneric("CNV.adjustbaseline", function(object, method.baseline.correction, ...) {
   standardGeneric("CNV.adjustbaseline")
 })
-setMethod("CNV.adjustbaseline", signature(object = "CNV.analysis"), function(object, baseline.method="BAF"){                                                                       
-
-
-  out<-NA
-  dnp.gr<-NA
-  dnp.df<-NA
+setMethod("CNV.adjustbaseline", signature(object = "CNV.analysis"), function(object, method.baseline.correction="BAF"){                                                                       
   
-  if (!baseline.method%in%c("MAD","BAF","MAXDENS")){
+  if (!method.baseline.correction%in%c("MAD","BAF","MAXDENS")){
     print("Selected method not available, using BAF (default). Options are 'MAD','MAXDENS','BAF'.")
-    baseline.method<-"BAF"
-    }
+    method.baseline.correction<-"BAF"
+  }
+  
+  object@method.baseline.correction<-method.baseline.correction
 
-    if (baseline.method=="MAD"){
+    if (method.baseline.correction=="MAD"){
 	object@bin$shift<- optim(0, function(s) median(abs(object@bin$ratio - 
         s), na.rm = TRUE), method = "Brent", lower = -100, upper = 100)$par
     
@@ -364,9 +361,9 @@ setMethod("CNV.adjustbaseline", signature(object = "CNV.analysis"), function(obj
     x.histo <-hist(object@bin$ratio,breaks=seq(-20,20,by=0.01),xlim=c(-1,1),prob=TRUE,col="grey")     #,plot=FALSE
     x.density <- density(object@bin$ratio,n=1024,bw=0.025)
     
-    if (baseline.method=="MAXDENS"){
+    if (method.baseline.correction=="MAXDENS"){
 	object@bin$shift<- x.density$x[which.max(x.density$y)]
-    }else  if (baseline.method=="BAF"){
+    }else  if (method.baseline.correction=="BAF"){
 	
       #Make it a time-series
       ts_y<-ts(x.density$y)
