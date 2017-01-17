@@ -257,12 +257,12 @@ NULL
 #' names(x)
 #' names(x) <- 'Sample 1'
 #' @author Volker Hovestadt \email{conumee@@hovestadt.bio}
+#' @author Damian Stichel \email{d.stichel@@dkfz.de}
 #' @export
 setGeneric("CNV.segment", function(object, ...) {
-    standardGeneric("CNV.segment")
+    standardGeneric("CNV.segment_DS")
 })
 
-#' @rdname CNV.segment
 setMethod("CNV.segment", signature(object = "CNV.analysis"), function(object, 
     alpha = 0.001, nperm = 50000, min.width = 5, undo.splits = "sdundo", 
     undo.SD = 2.2, verbose = 0, ...) {
@@ -278,44 +278,8 @@ setMethod("CNV.segment", signature(object = "CNV.analysis"), function(object,
         c("object", "verbose")), function(an) if (is.element(an, names(a2))) 
         a2[[an]] else a1[[an]], simplify = FALSE))
     
-    x1 <- DNAcopy::CNA(genomdat = object@bin$ratio[names(object@anno@bins)], 
-        chrom = as.vector(seqnames(object@anno@bins)), maploc = values(object@anno@bins)$midpoint, 
-        data.type = "logratio", sampleid = "sampleid")
-    x2 <- DNAcopy::segment(x = x1, verbose = verbose, min.width = min.width, 
-        nperm = nperm, alpha = alpha, undo.splits = undo.splits, undo.SD = undo.SD, 
-        ...)
-    object@seg$summary <- DNAcopy::segments.summary(x2)
-    object@seg$summary$chrom <- as.vector(object@seg$summary$chrom)  # DNAcopy will factor chrom names. is there another way? 
-    object@seg$p <- DNAcopy::segments.p(x2)
-    object@seg$p$chrom <- as.vector(object@seg$p$chrom)
+	    data(chromosome_positions)
     
-    return(object)
-}) 
-
-
-setGeneric("CNV.segment_DS", function(object, ...) {
-    standardGeneric("CNV.segment_DS")
-})
-
-setMethod("CNV.segment_DS", signature(object = "CNV.analysis"), function(object, 
-    alpha = 0.001, nperm = 50000, min.width = 5, undo.splits = "sdundo", 
-    undo.SD = 2.2, verbose = 0, ...) {
-    # if(length(object@fit) == 0) stop('fit unavailable, run CNV.fit')
-    if (length(object@bin) == 0) 
-        stop("bin unavailable, run CNV.bin")
-    # if(length(object@detail) == 0) stop('bin unavailable, run
-    # CNV.detail')
-    
-    a1 <- formals()
-    a2 <- as.list(match.call())[-1]
-    object@seg$args <- as.list(sapply(setdiff(unique(names(c(a1, a2))), 
-        c("object", "verbose")), function(an) if (is.element(an, names(a2))) 
-        a2[[an]] else a1[[an]], simplify = FALSE))
-    
-
-		chromosome_positions<-read.xlsx("/home/damian/sequencing/Projekte/conumee/data/chromosome_positions.xlsx")
-		chromosome_positions$chromosome<-paste0("chr",chromosome_positions$chromosome)
-
     x1 <- DNAcopy::CNA(genomdat = object@bin$ratio[names(object@anno@bins)], 
         chrom = as.vector(seqnames(object@anno@bins)), maploc = values(object@anno@bins)$midpoint, 
         data.type = "logratio", sampleid = "sampleid")

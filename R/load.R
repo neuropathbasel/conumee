@@ -25,12 +25,12 @@ setMethod("CNV.load", signature(input = "MethylSet"), function(input, names = NU
     unmethy.ba <- minfi::getUnmeth(input)
     object@intensity <- as.data.frame(methy.ba + unmethy.ba)
 
-    pos<-readRDS("conumee_source_code/BAFsnps.positions.RDS")
+    data(BAFsnps_positions)
 
     BAFsnps.names<-rownames(input)[grepl("rs",rownames(input))]
 
     #object@BAFsnps<-data.frame(probe=BAFsnps.names,BAF=methy.ba[rownames(betas)%in%BAFsnps.names] / (methy.ba[rownames(betas)%in%BAFsnps.names] +unmethy.ba[rownames(betas)%in%BAFsnps.names] +100))
-     object@BAFsnps<-data.frame(probe=pos$probe,chrom=pos$chrom,start=pos$start,end=pos$end,BAF=methy.ba[match(pos$probe,rownames(methy.ba))] / (methy.ba[match(pos$probe,rownames(methy.ba))] +unmethy.ba[match(pos$probe,rownames(unmethy.ba))] +100)) 
+     object@BAFsnps<-data.frame(probe=BAFsnps_positions$probe,chrom=BAFsnps_positions$chrom,start=BAFsnps_positions$start,end=BAFsnps_positions$end,BAF=methy.ba[match(BAFsnps_positions$probe,rownames(methy.ba))] / (methy.ba[match(BAFsnps_positions$probe,rownames(methy.ba))] +unmethy.ba[match(BAFsnps_positions$probe,rownames(unmethy.ba))] +100)) 
     
     input.names <- grep("Name", setdiff(colnames(minfi::pData(input)), 
         c("Basename", "filenames")), ignore.case = TRUE)
