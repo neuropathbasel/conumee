@@ -64,7 +64,7 @@ setMethod("show", "CNV.anno", function(object) {
 #' d[1:2]
 #' @author Volker Hovestadt \email{conumee@@hovestadt.bio}
 #' @export
-setClass("CNV.data", representation(date = "character", intensity = "data.frame"))
+setClass("CNV.data", representation(date = "character", intensity = "data.frame", BAFsnps="data.frame"))
 
 #' @rdname CNV.data-class
 #' @param object \code{CNV.data} object
@@ -76,6 +76,11 @@ setMethod("show", "CNV.data", function(object) {
     } else {
         cat("  @intensity : available (", ncol(object@intensity), " samples, ", 
             nrow(object@intensity), " probes)\n", sep = "")
+    }
+    if (length(object@BAFsnps) == 0) {
+        cat("  @BAFsnps : unavailable, run CNV.load with MethylSet as input\n", sep = "")
+    } else {
+        cat("  @BAFsnps : available (", nrow(object@BAFsnps), " values)\n", sep = "")
     }
 })
 
@@ -144,7 +149,7 @@ setReplaceMethod("names", signature(x = "CNV.data"), function(x, value) {
 #' @author Volker Hovestadt \email{conumee@@hovestadt.bio}
 #' @export
 setClass("CNV.analysis", representation(name = "character", date = "character", 
-    anno = "CNV.anno", fit = "list", bin = "list", detail = "list", seg = "list"))
+    anno = "CNV.anno", fit = "list", bin = "list", detail = "list", seg = "list",BAFsnps="data.frame"))
 
 #' @rdname CNV.analysis-class
 #' @param object \code{CNV.analysis} object
@@ -178,6 +183,11 @@ setMethod("show", "CNV.analysis", function(object) {
     } else {
         cat("  @seg       : available (", nrow(object@seg$summary), " segments)\n", 
             sep = "")
+    }
+    if (length(object@BAFsnps) == 0) {
+        cat("  @BAFsnps   : unavailable, run CNV.load with MethylSet as input\n", sep = "")
+    } else {
+        cat("  @BAFsnps   : available (", nrow(object@BAFsnps), " values)\n", sep = "")
     }
 })
 

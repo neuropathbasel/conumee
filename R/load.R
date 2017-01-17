@@ -21,8 +21,16 @@ setGeneric("CNV.load", function(input, ...) {
 #' @rdname CNV.load
 setMethod("CNV.load", signature(input = "MethylSet"), function(input, names = NULL) {
     object <- new("CNV.data")
-    
-    object@intensity <- as.data.frame(minfi::getMeth(input) + minfi::getUnmeth(input))
+    methy.ba <- minfi::getMeth(input)
+    unmethy.ba <- minfi::getUnmeth(input)
+    object@intensity <- as.data.frame(methy.ba + unmethy.ba)
+
+    pos<-readRDS("conumee_source_code/BAFsnps.positions.RDS")
+
+    BAFsnps.names<-rownames(input)[grepl("rs",rownames(input))]
+
+    #object@BAFsnps<-data.frame(probe=BAFsnps.names,BAF=methy.ba[rownames(betas)%in%BAFsnps.names] / (methy.ba[rownames(betas)%in%BAFsnps.names] +unmethy.ba[rownames(betas)%in%BAFsnps.names] +100))
+     object@BAFsnps<-data.frame(probe=pos$probe,chrom=pos$chrom,start=pos$start,end=pos$end,BAF=methy.ba[match(pos$probe,rownames(methy.ba))] / (methy.ba[match(pos$probe,rownames(methy.ba))] +unmethy.ba[match(pos$probe,rownames(unmethy.ba))] +100)) 
     
     input.names <- grep("Name", setdiff(colnames(minfi::pData(input)), 
         c("Basename", "filenames")), ignore.case = TRUE)
@@ -42,6 +50,7 @@ setMethod("CNV.load", signature(input = "data.frame"), function(input,
     names = NULL) {
     object <- new("CNV.data")
     object@date <- date()
+    object@BAFsnps<-data.frame()
     
     if (any(grepl("TargetID", colnames(input)))) 
         rownames(input) <- input[, "TargetID"]
@@ -69,6 +78,7 @@ setMethod("CNV.load", signature(input = "data.frame"), function(input,
             2)]] + input[, input.i[seq(2, length(input.i), 2)]])
         colnames(object@intensity) <- make.names(input.n[seq(1, length(input.i), 
             2)], unique = TRUE)
+
     } else {
         object@intensity <- as.data.frame(input)
     }
@@ -95,6 +105,21 @@ setMethod("CNV.load", signature(input = "numeric"), function(input, names = NULL
     if (!is.null(names)) 
         names(object) <- names
     
+    object <- CNV.check(object)
+    
+    return(object)
+})
+
+setGeneric("CNV.data.convert", function(intensity, BAFsnps, ...) {
+    standardGeneric("CNV.data.convert")
+})
+
+#' @rdname CNV.load
+setMethod("CNV.data.convert", signature(intensity = "data.frame", BAFsnps="data.frame"), function(intensity, BAFsnps) {
+    object <- new("CNV.data")
+    object@intensity<-intensity
+    object@BAFsnps<-BAFsnps    
+
     object <- CNV.check(object)
     
     return(object)
@@ -141,7 +166,7 @@ setMethod("CNV.check", signature(object = "CNV.data"), function(object) {
 #' @export
 read.450k.url <- function(url = NULL, idat = NULL) {
     if (is.null(url)) 
-        url <- "https://github.com/hovestadt/conumeeData/raw/master/"
+        url <- "https://tcga-data.nci.nih.gov/tcgafiles/ftp_auth/distro_ftpusers/anonymous/tumor/brca/cgcc/jhu-usc.edu/humanmethylation450/methylation/jhu-usc.edu_BRCA.HumanMethylation450.Level_1.8.8.0/"
     if (is.null(idat)) 
         idat <- c("6042324037_R05C02", "6042324037_R06C01")
     tmp <- paste0(tempdir(), .Platform$file.sep)
@@ -150,7 +175,7 @@ read.450k.url <- function(url = NULL, idat = NULL) {
     if (!any(grepl("_Grn.idat", idat))) 
         idat <- unlist(lapply(idat, paste0, c("_Grn.idat", "_Red.idat")))
     for (i in idat) .curl(url = paste0(url, i), file = paste0(tmp, i))
-    idatRG <- read.metharray.exp(base = tmp)
+    idatRG <- read.450k.exp(base = tmp)
     for (i in idat) file.remove(paste0(tmp, i))
     return(idatRG)
 }
@@ -167,11 +192,10 @@ read.450k.url <- function(url = NULL, idat = NULL) {
         message("downloading ", tail(strsplit(url, "/")[[1]], 1), appendLF = FALSE)
     f <- RCurl::CFILE(file, mode = "wb")
     if (.Platform$OS.type == "unix") {
-        r <- RCurl::curlPerform(url = url, writedata = f@ref, noprogress = TRUE,
-                                .opts = list(followlocation = TRUE))
+        r <- RCurl::curlPerform(url = url, writedata = f@ref, noprogress = TRUE)
     } else {
         r <- RCurl::curlPerform(url = url, writedata = f@ref, noprogress = TRUE, 
-                                .opts = list(followlocation = TRUE, ssl.verifypeer = FALSE))
+            .opts = list(ssl.verifypeer = FALSE))
     }
     RCurl::close(f)
     if (verbose) 

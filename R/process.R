@@ -72,14 +72,16 @@ setMethod("CNV.fit", signature(query = "CNV.data", ref = "CNV.data", anno = "CNV
         }
         object@anno <- anno
         
-        r <- cor(query@intensity[p, ], ref@intensity[p, ])[1, ] < 0.99
-        if (any(!r)) message("query sample seems to also be in the reference set. not used for fit.")
+        if (max(cor(query@intensity[p, ], ref@intensity[p, ])[1, ]) > 0.99) 
+           #stop("query sample seems to also be in the reference set. cannot fit against itself.")             #DS 14.09.16
+         print("Warning: query sample seems to also be in the reference set.")
+           ref@intensity<-ref@intensity[,-which.max(cor(query@intensity[p, ], ref@intensity[p, ])[1, ])]
         if (intercept) {
             ref.fit <- lm(y ~ ., data = data.frame(y = query@intensity[p, 
-                1], X = ref@intensity[p, r]))
+                1], X = ref@intensity[p, ]))
         } else {
             ref.fit <- lm(y ~ . - 1, data = data.frame(y = query@intensity[p, 
-                1], X = ref@intensity[p, r]))
+                1], X = ref@intensity[p, ]))
         }
         object@fit$coef <- ref.fit$coefficients
         
@@ -90,6 +92,8 @@ setMethod("CNV.fit", signature(query = "CNV.data", ref = "CNV.data", anno = "CNV
         object@fit$noise <- sqrt(mean((object@fit$ratio[-1] - object@fit$ratio[-length(object@fit$ratio)])^2, 
             na.rm = TRUE))
         
+	object@BAFsnps<-query@BAFsnps
+
         return(object)
     })
 
@@ -143,8 +147,9 @@ setMethod("CNV.bin", signature(object = "CNV.analysis"), function(object) {
     
     object@bin$ratio <- sapply(split(object@fit$ratio[o2[, "probe"]], o2[, 
         "bin"]), median, na.rm = TRUE)[names(object@anno@bins)]
-    object@bin$shift <- optim(0, function(s) median(abs(object@bin$ratio - 
-        s), na.rm = TRUE), method = "Brent", lower = -100, upper = 100)$par
+   # object@bin$shift <- optim(0, function(s) median(abs(object@bin$ratio - 
+   #     s), na.rm = TRUE), method = "Brent", lower = -100, upper = 100)$par
+   object@bin$shift <-0
     
     return(object)
 })
@@ -286,3 +291,199 @@ setMethod("CNV.segment", signature(object = "CNV.analysis"), function(object,
     
     return(object)
 }) 
+
+
+setGeneric("CNV.segment_DS", function(object, ...) {
+    standardGeneric("CNV.segment_DS")
+})
+
+setMethod("CNV.segment_DS", signature(object = "CNV.analysis"), function(object, 
+    alpha = 0.001, nperm = 50000, min.width = 5, undo.splits = "sdundo", 
+    undo.SD = 2.2, verbose = 0, ...) {
+    # if(length(object@fit) == 0) stop('fit unavailable, run CNV.fit')
+    if (length(object@bin) == 0) 
+        stop("bin unavailable, run CNV.bin")
+    # if(length(object@detail) == 0) stop('bin unavailable, run
+    # CNV.detail')
+    
+    a1 <- formals()
+    a2 <- as.list(match.call())[-1]
+    object@seg$args <- as.list(sapply(setdiff(unique(names(c(a1, a2))), 
+        c("object", "verbose")), function(an) if (is.element(an, names(a2))) 
+        a2[[an]] else a1[[an]], simplify = FALSE))
+    
+
+		chromosome_positions<-read.xlsx("/home/damian/sequencing/Projekte/conumee/data/chromosome_positions.xlsx")
+		chromosome_positions$chromosome<-paste0("chr",chromosome_positions$chromosome)
+
+    x1 <- DNAcopy::CNA(genomdat = object@bin$ratio[names(object@anno@bins)], 
+        chrom = as.vector(seqnames(object@anno@bins)), maploc = values(object@anno@bins)$midpoint, 
+        data.type = "logratio", sampleid = "sampleid")
+
+		x1$chrom<-unlist(lapply(1:nrow(x1),function(i){ifelse(x1$maploc[i] < chromosome_positions$centromere[which(x1$chrom[i]==chromosome_positions$chromosome)],paste0(x1$chrom[i],"p"),paste0(x1$chrom[i],"q"))}))
+
+		#x1$chrom[x1$chrom=="chr1"&x1$maploc>121535434]<-"chr1q"
+		#x1$chrom[x1$chrom=="chr9"&x1$maploc<47367679]<-"chr9p"
+		#x1$chrom[x1$chrom=="chr9"&x1$maploc>47367679]<-"chr9q"
+		#x1$chrom[x1$chrom=="chr16"&x1$maploc<35335801]<-"chr16p"
+		#x1$chrom[x1$chrom=="chr16"&x1$maploc>35335801]<-"chr16q"
+    x2 <- DNAcopy::segment(x = x1, verbose = verbose, min.width = min.width, 
+        nperm = nperm, alpha = alpha, undo.splits = undo.splits, undo.SD = undo.SD, 
+        ...)
+    object@seg$summary <- DNAcopy::segments.summary(x2)
+    object@seg$summary$chrom <- as.vector(object@seg$summary$chrom)  # DNAcopy will factor chrom names. is there another way? 
+    object@seg$p <- DNAcopy::segments.p(x2)
+    object@seg$p$chrom <- as.vector(object@seg$p$chrom)
+    
+    return(object)
+})
+
+
+
+
+setGeneric("CNV.adjustbaseline", function(object, baseline.method, ...) {
+  standardGeneric("CNV.adjustbaseline")
+})
+setMethod("CNV.adjustbaseline", signature(object = "CNV.analysis"), function(object, baseline.method="BAF"){                                                                       
+
+
+  out<-NA
+  dnp.gr<-NA
+  dnp.df<-NA
+  
+  if (!baseline.method%in%c("MAD","BAF","MAXDENS")){
+    print("Selected method not available, using BAF (default). Options are 'MAD','MAXDENS','BAF'.")
+    baseline.method<-"BAF"
+    }
+
+    if (baseline.method=="MAD"){
+	object@bin$shift<- optim(0, function(s) median(abs(object@bin$ratio - 
+        s), na.rm = TRUE), method = "Brent", lower = -100, upper = 100)$par
+    
+  }else{
+    x.histo <-hist(object@bin$ratio,breaks=seq(-20,20,by=0.01),xlim=c(-1,1),prob=TRUE,col="grey")     #,plot=FALSE
+    x.density <- density(object@bin$ratio,n=1024,bw=0.025)
+    
+    if (baseline.method=="MAXDENS"){
+	object@bin$shift<- x.density$x[which.max(x.density$y)]
+    }else  if (baseline.method=="BAF"){
+	
+      #Make it a time-series
+      ts_y<-ts(x.density$y)
+      #Compute turning points
+      tp<-turnpoints(ts_y)
+      
+      out<-data.frame(pos=which(tp$peaks==TRUE | tp$pits==TRUE),tppos=tp$tppos,proba=tp$proba,info=tp$info)
+      out$peak<-tp$peaks[out$pos]
+      out$density<-x.density$y[out$tppos]
+      #Keep only peaks, no pits
+      out<-out[out$peak==TRUE,]
+      #Keep only peaks with density higher than cutoff
+      out<-out[out$density>=0.1,]
+      
+      ### Compute BAF (only 65 probes)
+      #BAFs=data.frame(V4=rownames(betas)[which(rownames(betas) %in% pos$V4)],BAF=betas[which(rownames(betas) %in% pos$V4)])
+      #BAFs<-as.data.frame(getSnpBeta(RGset))
+
+
+      dnp.gr<-GRanges(object@BAFsnps$chrom, IRanges(object@BAFsnps$start, object@BAFsnps$end), names=object@BAFsnps$probe,BAF=object@BAFsnps$BAF)
+      
+      #### Merge BAFs to dnp.df, make sure to keep correct order   
+     # dnp.df<-object@BAFsnps
+
+      #for (ind in 1:nrow(dnp.df)){dnp.df$order[ind]<-ind}
+      #dnp.df<-merge(dnp.df,BAFs,by="V4",all.x=TRUE,sort=FALSE)                 
+      #dnp.df<-dnp.df[order(dnp.df$order),]
+      
+      seg.gr <- GRanges(object@seg$summary$chrom, IRanges(object@seg$summary$loc.start, object@seg$summary$loc.end), score=object@seg$summary$seg.median)
+      df <-data.frame(xpos=sapply(as.list(findOverlaps(dnp.gr, seg.gr)), function(o) median(values(seg.gr)$score[o])),BAF=dnp.gr$BAF)
+      df<-na.omit(df)
+ 
+      #Associate rs-probes to intensity levels
+      diff <- unlist(lapply(1:(length(x.density$x[out$tppos])-1),function(x) x.density$x[out$tppos][x+1]-x.density$x[out$tppos][x]))
+      
+      out$level <- c(1:length(x.density$x[out$tppos]))
+      out$xpos  <- x.density$x[out$tppos]
+      if (nrow(out)>5){out<-out[order(out$density,decreasing=TRUE),][1:5,]
+      out<-out[order(out$xpos,decreasing=FALSE),] 
+      out$level <-c(1:nrow(out))}
+      
+      border <- unlist(lapply(2:length(x.density$x[out$tppos]),function(x) x.density$x[out$tppos][x]-diff[x-1]/2))
+      border <- c(out$xpos[1]-diff[1]/2,border,out$xpos[nrow(out)]+diff[length(diff)]/2)
+      if (!is.na(border[1])){
+        df$level<-unlist(lapply(1:nrow(df), function(x) {
+          if( border[1]<df$xpos[x]&df$xpos[x]<border[length(border)] ){max(which(df$xpos[x] > border))}else{NA}
+        }))
+      } else df$level<-1
+      df<-df[complete.cases(df),]
+      
+      ###### Get rid of levels, which have less than 6 SNPs assigned   ######
+      levels.to.delete<-c()
+      for (j in 1:nrow(out)){
+        if (length(table(df$level)[names(table(df$level))==j])>0 && (table(df$level)[names(table(df$level))==j]>5) ){
+          print(j)
+        }else {  
+          print(paste0("Bad level: ", j))
+          levels.to.delete<-c(levels.to.delete,j)}
+      }
+      if(!is.null(levels.to.delete)&length(levels.to.delete)<nrow(out)){
+        df$level[which(df$level%in%levels.to.delete)]<-NA
+        out<-out[-levels.to.delete,]}
+      
+      #if(isEmpty(which(df$level==1))) {df<-rbind(df,c(NA,NA,NA,1,1))}
+      #if(max(df$level)>=2 & isEmpty(which(df$level==2))) {df<-rbind(df,c(NA,NA,NA,2,2))}
+      #if(max(df$level)>=3 & isEmpty(which(df$level==3))) {df<-rbind(df,c(NA,NA,NA,3,3))}
+      #if(max(df$level)>=4 & isEmpty(which(df$level==4))) {df<-rbind(df,c(NA,NA,NA,4,4))}
+      
+      ###Transform BAFs to be between 0 and 0.5
+      df$BAF.transf[df$BAF<0.5]<-df$BAF[df$BAF<0.5]
+      df$BAF.transf[df$BAF>0.5]<-abs(df$BAF[df$BAF>0.5]-1)
+      
+      #### Split with respect to intensity levels #####
+      df.split<-split(df,df$level)
+      
+      ##### Compute BAF-Score #####  
+      if (nrow(out)==1){out$score<-length(which(df$BAF>=0.4 & df$BAF<=0.6))/length(df$BAF)
+      out$score2<-mean(abs(df$BAF[!is.na(df$BAF)]-0.5))
+      out$score.abs<-length(which(df$BAF>=0.4 & df$BAF<=0.6))
+      }else {out$score <- unlist(lapply(df.split,function(x){length(which(x$BAF>=0.4 & x$BAF<=0.6))/length(x$BAF)})) 
+      out$score2 <- unlist(lapply(df.split,function(x){mean(abs(x$BAF[!is.na(x$BAF)]-0.5))}))
+      out$score.abs<-unlist(lapply(df.split,function(x){length(which(x$BAF>=0.4 & x$BAF<=0.6))}))
+      }
+      
+      ##### k-means Clustering ####  
+      out$CMP<-unlist(lapply(df.split,function(x){
+        clust<- kmeans(x$BAF.transf,centers=2)
+        sort(clust$centers)[2]        #ClusterMittelPunkt von "oberem" Cluster ausgeben
+      })) 
+      out$level.candidate<-ifelse(out$CMP>0.4,2,ifelse(out$CMP<0.3,1,3))
+      out$level.candidate[which(out$score.abs<3)]<-0            #  NEGLECT LEVELS WITH score.abs<2
+      
+      
+      if ( length(which(out$level.candidate==2))==1 ) { shift_v3<-out$xpos[which(out$level.candidate==2)]    
+      } else if ( length(which(out$level.candidate==2))==0 ) {    ###wenn kein Candidat für Level 2, dann nach alter Methode
+        warning<-paste0(warning,"no candidate for level 2 detected")          
+        if (out$score[1]>0.15&out$score.abs[1]>2){
+          if(nrow(out)>1 &out$score.abs[1]<8 & out$score.abs[2]>8){
+            shift_v3<-out$xpos[2]
+          } else {shift_v3<-out$xpos[1]}
+        }else{
+          if(nrow(out)>2 &out$score.abs[2]<8 & out$score.abs[3]>8){
+            shift_v3<-out$xpos[3]
+          } else{shift_v3<-out$xpos[min(2,nrow(out))]}
+        }  
+      } else{
+        warning<-paste0(warning,"more than 1 candidate for level 2 detected")
+        shift_v3<-min(out$xpos[which(out$level.candidate==2)])
+      }
+      
+      object@bin$shift<-shift_v3
+        
+	object@bin$out<-out
+	object@bin$dnp.df<-dnp.df
+	object@bin$dnp.gr<-dnp.gr
+    }else print("ERROR: Selected method is not available.")
+    }
+  return(object)
+})
+
