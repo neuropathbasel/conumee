@@ -48,6 +48,7 @@
 #' CNV.write(x, what = 'bins')
 #' CNV.write(x, what = 'probes')
 #' @author Volker Hovestadt \email{conumee@@hovestadt.bio}
+#'@author Damian Stichel \email{d.stichel@dkfz.de}
 #' @export
 setGeneric("CNV.genomeplot", function(object, ...) {
   standardGeneric("CNV.genomeplot")
@@ -103,7 +104,7 @@ setMethod("CNV.genomeplot", signature(object = "CNV.analysis"), function(object,
   }
   
   # ratio
-  bin.ratio <- object@bin$ratio - object@bin$shift
+  bin.ratio <- object@bin$ratio 
   bin.ratio[bin.ratio < ylim[1]] <- ylim[1]
   bin.ratio[bin.ratio > ylim[2]] <- ylim[2]
   bin.ratio.cols <- apply(colorRamp(cols)((bin.ratio + max(abs(ylim)))/(2 * 
@@ -112,23 +113,16 @@ setMethod("CNV.genomeplot", signature(object = "CNV.analysis"), function(object,
   lines(chr.cumsum0[as.vector(seqnames(object@anno@bins))] + values(object@anno@bins)$midpoint, 
         bin.ratio, type = "p", pch = 16, cex = 0.75, col = bin.ratio.cols)
   
-  #DS
-  abline(h=0,col="black",lwd=3)
-  abline(h=-1*object@bin$shift,col="red",lwd=3)
-  abline(h=-1*object@bin$correction,col="blue",lwd=3)
-  ##/DS
-  
-  
-  for (i in seq(length(object@seg$summary$seg.median))) {
+   for (i in seq(length(object@seg$summary$seg.median))) {
     lines(c(object@seg$summary$loc.start[i] + chr.cumsum0[object@seg$summary$chrom[i]], 
             object@seg$summary$loc.end[i] + chr.cumsum0[object@seg$summary$chrom[i]]), 
           rep(min(ylim[2], max(ylim[1], object@seg$summary$seg.median[i])), 
-              2) - object@bin$shift, col = "darkblue", lwd = 2)
+              2), col = "darkblue", lwd = 2)
   }
   
   # detail
   if (detail & length(object@detail) > 0) {
-    detail.ratio <- object@detail$ratio - object@bin$shift
+    detail.ratio <- object@detail$ratio 
     detail.ratio[detail.ratio < ylim[1]] <- ylim[1]
     detail.ratio[detail.ratio > ylim[2]] <- ylim[2]
     detail.ratio.above <- (detail.ratio > 0 & detail.ratio < 0.85) | 
@@ -248,7 +242,7 @@ setMethod("CNV.detailplot", signature(object = "CNV.analysis"), function(object,
   detail.probes <- names(object@anno@probes)[as.matrix(findOverlaps(detail.region, 
                                                                     object@anno@probes, maxgap = width(detail.region)))[, 2]]
   
-  detail.ratio <- object@fit$ratio[detail.probes] - object@bin$shift
+  detail.ratio <- object@fit$ratio[detail.probes] 
   detail.ratio[detail.ratio > ylim[2]] <- ylim[2]
   detail.ratio[detail.ratio < ylim[1]] <- ylim[1]
   detail.ratio.cols <- apply(colorRamp(cols)((detail.ratio + max(abs(ylim)))/(2 * 
@@ -258,7 +252,7 @@ setMethod("CNV.detailplot", signature(object = "CNV.analysis"), function(object,
         type = "p", pch = 4, cex = 0.75, col = detail.ratio.cols[detail.probes])
   
   anno.bins.detail <- object@anno@bins[detail.bins]
-  anno.bins.ratio <- object@bin$ratio[detail.bins] - object@bin$shift
+  anno.bins.ratio <- object@bin$ratio[detail.bins] 
   anno.bins.ratio[anno.bins.ratio > ylim[2]] <- ylim[2]
   anno.bins.ratio[anno.bins.ratio < ylim[1]] <- ylim[1]
   lines(as.vector(rbind(rep(start(anno.bins.detail), each = 2), rep(end(anno.bins.detail), 
@@ -378,6 +372,8 @@ setMethod("CNV.detailplot_wrap", signature(object = "CNV.analysis"), function(ob
 #' CNV.write(x, what = 'detail')
 #' CNV.write(x, what = 'bins')
 #' CNV.write(x, what = 'probes')
+#' CNV.write(x, what = 'arms')
+#' CNV.write(x, what = 'alteration.summary')
 #' @return if parameter \code{file} is not supplied, the table is returned as a \code{data.frame} object.
 #' @export
 setGeneric("CNV.write", function(object, ...) {
@@ -387,7 +383,7 @@ setGeneric("CNV.write", function(object, ...) {
 #' @rdname CNV.write
 setMethod("CNV.write", signature(object = "CNV.analysis"), function(object, 
                                                                     file = NULL, what = "segments") {
-  w <- pmatch(what, c("probes", "bins", "detail", "segments"))
+  w <- pmatch(what, c("probes", "bins", "detail", "segments","arms","alteration.summary"))
   if (w == 1) {
     if (length(object@fit) == 0) 
       stop("fit unavailable, run CNV.fit")
@@ -396,8 +392,7 @@ setMethod("CNV.write", signature(object = "CNV.analysis"), function(object,
         warning("filename does not end in .igv")
     x <- data.frame(Chromosome = as.vector(seqnames(object@anno@probes)), 
                     Start = start(object@anno@probes) - 1, End = end(object@anno@probes), 
-                    Feature = names(object@anno@probes), Value = round(object@fit$ratio - 
-                                                                         object@bin$shift, 3), row.names = NULL)
+                    Feature = names(object@anno@probes), Value = round(object@fit$ratio, 3), row.names = NULL)
     colnames(x) <- sub("Value", object@name, colnames(x))
   } else if (w == 2) {
     if (length(object@bin) == 0) 
@@ -407,8 +402,7 @@ setMethod("CNV.write", signature(object = "CNV.analysis"), function(object,
         warning("filename does not end in .igv")
     x <- data.frame(Chromosome = as.vector(seqnames(object@anno@bins)), 
                     Start = start(object@anno@bins), End = end(object@anno@bins), 
-                    Feature = names(object@anno@bins), Value = round(object@bin$ratio - 
-                                                                       object@bin$shift, 3), row.names = NULL)
+                    Feature = names(object@anno@bins), Value = round(object@bin$ratio, 3), row.names = NULL)
     colnames(x) <- sub("Value", object@name, colnames(x))
   } else if (w == 3) {
     if (length(object@detail) == 0) 
@@ -419,7 +413,7 @@ setMethod("CNV.write", signature(object = "CNV.analysis"), function(object,
     x <- data.frame(chr = as.vector(seqnames(object@anno@detail)), 
                     start = start(object@anno@detail), end = end(object@anno@detail), 
                     name = names(object@detail$probes), sample = object@name, probes = object@detail$probes, 
-                    value = round(object@detail$ratio - object@bin$shift, 3), row.names = NULL)
+                    value = round(object@detail$ratio, 3), alteration = object@detail$alteration, row.names = NULL)
   } else if (w == 4) {
     if (length(object@seg) == 0) 
       stop("seg unavailable, run CNV.bin")
@@ -430,9 +424,12 @@ setMethod("CNV.write", signature(object = "CNV.analysis"), function(object,
     x <- data.frame(ID = object@name, chrom = object@seg$summary$chrom, 
                     loc.start = object@seg$summary$loc.start, loc.end = object@seg$summary$loc.end, 
                     num.mark = object@seg$summary$num.mark, bstat = object@seg$p$bstat, 
-                    pval = object@seg$p$pval, seg.mean = round(object@seg$summary$seg.mean - 
-                                                                 object@bin$shift, 3), seg.median = round(object@seg$summary$seg.median - 
-                                                                                                            object@bin$shift, 3), row.names = NULL)
+                    pval = object@seg$p$pval, seg.mean = round(object@seg$summary$seg.mean, 3), 
+                    seg.median = round(object@seg$summary$seg.median, 3), alteration=object@seg$summary$alteration, row.names = NULL)
+  } else if (w == 5) {
+    x<-object@arms
+  } else if (w == 6) {
+     x<-object@alteration.summary
   } else {
     stop("value for what is ambigious.")
   }
@@ -446,240 +443,11 @@ setMethod("CNV.write", signature(object = "CNV.analysis"), function(object,
 
 
 
-
 ######
-setGeneric("CNV.genomeplot_new", function(object, ...) {
-  standardGeneric("CNV.genomeplot_new")
+setGeneric("CNV.genomeplot", function(object, ...) {
+  standardGeneric("CNV.genomeplot")
 })
-setMethod("CNV.genomeplot_new", signature(object = "CNV.analysis"), function(object, 
-                                                                                       chr = "all", chrX = TRUE, chrY = TRUE, centromere = TRUE, detail = TRUE, 
-                                                                                       main = NULL, ylim = c(-1.25, 1.25), set_par = TRUE, cols = c("lightgrey", 
-                                                                                                                                                    "lightgrey", "lightgrey", "lightgrey", "lightgrey")) {
-  # if(length(object@fit) == 0) stop('fit unavailable, run CNV.fit')
-  if (length(object@bin) == 0) 
-    stop("bin unavailable, run CNV.bin")
-  # if(length(object@detail) == 0) stop('bin unavailable, run CNV.detail')
-  if (length(object@seg) == 0) 
-    stop("bin unavailable, run CNV.seg")
-  
-  if (set_par) {
-    mfrow_original <- par()$mfrow
-    mar_original <- par()$mar
-    oma_original <- par()$oma
-    par(mfrow = c(1, 1), mar = c(4, 4, 4, 4), oma = c(0, 0, 0, 0))
-  }
-  
-  if (is.null(main)) 
-    main <- object@name
-  if (chr[1] == "all") {
-    chr <- object@anno@genome$chr
-  } else {
-    chr <- intersect(chr, object@anno@genome$chr)
-  }
-  chr.cumsum0 <- .cumsum0(object@anno@genome[chr, "size"], n = chr)
-  if (!chrX & is.element("chrX", names(chr.cumsum0))) 
-    chr.cumsum0["chrX"] <- NA
-  if (!chrY & is.element("chrY", names(chr.cumsum0))) 
-    chr.cumsum0["chrY"] <- NA
-  
-  plot(NA, xlim = c(0, sum(as.numeric(object@anno@genome[chr, "size"])) - 
-                      0), ylim = ylim, xaxs = "i", xaxt = "n", yaxt = "n", xlab = NA, 
-       ylab = NA, main = main)
-  abline(v = .cumsum0(object@anno@genome[chr, "size"], right = TRUE), 
-         col = "grey")
-  if (centromere) 
-    abline(v = .cumsum0(object@anno@genome[chr, "size"]) + object@anno@genome[chr, 
-                                                                              "pq"], col = "grey", lty = 2)
-  axis(1, at = .cumsum0(object@anno@genome[chr, "size"]) + object@anno@genome[chr, 
-                                                                              "size"]/2, labels = object@anno@genome[chr, "chr"], las = 2)
-  if (all(ylim == c(-1.25, 1.25))) {
-    axis(2, at = round(seq(-1.2, 1.2, 0.4), 1), las = 2)
-  } else {
-    axis(2, las = 2)
-  }
-  
-  # ratio
-  bin.ratio <- object@bin$ratio - object@bin$shift
-  bin.ratio[bin.ratio < ylim[1]] <- ylim[1]
-  bin.ratio[bin.ratio > ylim[2]] <- ylim[2]
-  bin.ratio.cols <- apply(colorRamp(cols)((bin.ratio + max(abs(ylim)))/(2 * 
-                                                                          max(abs(ylim)))), 1, function(x) rgb(x[1], x[2], x[3], maxColorValue = 255))
-  
-  lines(chr.cumsum0[as.vector(seqnames(object@anno@bins))] + values(object@anno@bins)$midpoint, 
-        bin.ratio, type = "p", pch = 16, cex = 0.75, col = bin.ratio.cols)
-  
-  if (set_par) 
-    par(mfrow = mfrow_original, mar = mar_original, oma = oma_original)
-})
-
-
-
-
-
-
-
-######
-setGeneric("CNV.genomeplot_without_color", function(object, ...) {
-  standardGeneric("CNV.genomeplot_without_color")
-})
-setMethod("CNV.genomeplot_without_color", signature(object = "CNV.analysis"), function(object, 
-                                                                                       chr = "all", chrX = TRUE, chrY = TRUE, centromere = TRUE, detail = TRUE, 
-                                                                                       main = NULL, ylim = c(-1.25, 1.25), set_par = TRUE, cols = c("red", 
-                                                                                                                                                    "lightgrey", "lightgrey", "lightgrey", "green")) {
-  # if(length(object@fit) == 0) stop('fit unavailable, run CNV.fit')
-  if (length(object@bin) == 0) 
-    stop("bin unavailable, run CNV.bin")
-  # if(length(object@detail) == 0) stop('bin unavailable, run CNV.detail')
-  if (length(object@seg) == 0) 
-    stop("bin unavailable, run CNV.seg")
-  
-  if (set_par) {
-    mfrow_original <- par()$mfrow
-    mar_original <- par()$mar
-    oma_original <- par()$oma
-    par(mfrow = c(1, 1), mar = c(4, 4, 4, 4), oma = c(0, 0, 0, 0))
-  }
-  
-  if (is.null(main)) 
-    main <- object@name
-  if (chr[1] == "all") {
-    chr <- object@anno@genome$chr
-  } else {
-    chr <- intersect(chr, object@anno@genome$chr)
-  }
-  chr.cumsum0 <- .cumsum0(object@anno@genome[chr, "size"], n = chr)
-  if (!chrX & is.element("chrX", names(chr.cumsum0))) 
-    chr.cumsum0["chrX"] <- NA
-  if (!chrY & is.element("chrY", names(chr.cumsum0))) 
-    chr.cumsum0["chrY"] <- NA
-  
-  plot(NA, xlim = c(0, sum(as.numeric(object@anno@genome[chr, "size"])) - 
-                      0), ylim = ylim, xaxs = "i", xaxt = "n", yaxt = "n", xlab = NA, 
-       ylab = NA, main = main)
-  abline(v = .cumsum0(object@anno@genome[chr, "size"], right = TRUE), 
-         col = "grey")
-  if (centromere) 
-    abline(v = .cumsum0(object@anno@genome[chr, "size"]) + object@anno@genome[chr, 
-                                                                              "pq"], col = "grey", lty = 2)
-  axis(1, at = .cumsum0(object@anno@genome[chr, "size"]) + object@anno@genome[chr, 
-                                                                              "size"]/2, labels = object@anno@genome[chr, "chr"], las = 2)
-  if (all(ylim == c(-1.25, 1.25))) {
-    axis(2, at = round(seq(-1.2, 1.2, 0.4), 1), las = 2)
-  } else {
-    axis(2, las = 2)
-  }
-  
-  # ratio
-  bin.ratio <- object@bin$ratio - object@bin$shift
-  bin.ratio[bin.ratio < ylim[1]] <- ylim[1]
-  bin.ratio[bin.ratio > ylim[2]] <- ylim[2]
-  bin.ratio.cols <- apply(colorRamp(cols)((bin.ratio + max(abs(ylim)))/(2 * 
-                                                                          max(abs(ylim)))), 1, function(x) rgb(x[1], x[2], x[3], maxColorValue = 255))
-  
-  lines(chr.cumsum0[as.vector(seqnames(object@anno@bins))] + values(object@anno@bins)$midpoint, 
-        bin.ratio, type = "p", pch = 16, cex = 0.75, col = bin.ratio.cols)
-  
-  if (set_par) 
-    par(mfrow = mfrow_original, mar = mar_original, oma = oma_original)
-})
-
-
-######
-setGeneric("CNV.genomeplot_new1", function(object, ...) {
-  standardGeneric("CNV.genomeplot_new1")
-})
-setMethod("CNV.genomeplot_new1", signature(object = "CNV.analysis"), function(object, 
-                                                                              chr = "all", chrX = TRUE, chrY = TRUE, centromere = TRUE, detail = TRUE, 
-                                                                              main = NULL, ylim = c(-1.25, 1.25), set_par = TRUE, cols = c("red", 
-                                                                                                                                           "red", "lightgrey", "green", "green")) {
-  # if(length(object@fit) == 0) stop('fit unavailable, run CNV.fit')
-  if (length(object@bin) == 0) 
-    stop("bin unavailable, run CNV.bin")
-  # if(length(object@detail) == 0) stop('bin unavailable, run CNV.detail')
-  if (length(object@seg) == 0) 
-    stop("bin unavailable, run CNV.seg")
-  
-  if (set_par) {
-    mfrow_original <- par()$mfrow
-    mar_original <- par()$mar
-    oma_original <- par()$oma
-    par(mfrow = c(1, 1), mar = c(4, 4, 4, 4), oma = c(0, 0, 0, 0))
-  }
-  
-  if (is.null(main)) 
-    main <- object@name
-  if (chr[1] == "all") {
-    chr <- object@anno@genome$chr
-  } else {
-    chr <- intersect(chr, object@anno@genome$chr)
-  }
-  chr.cumsum0 <- .cumsum0(object@anno@genome[chr, "size"], n = chr)
-  if (!chrX & is.element("chrX", names(chr.cumsum0))) 
-    chr.cumsum0["chrX"] <- NA
-  if (!chrY & is.element("chrY", names(chr.cumsum0))) 
-    chr.cumsum0["chrY"] <- NA
-  
-  plot(NA, xlim = c(0, sum(as.numeric(object@anno@genome[chr, "size"])) - 
-                      0), ylim = ylim, xaxs = "i", xaxt = "n", yaxt = "n", xlab = NA, 
-       ylab = NA, main = main)
-  abline(v = .cumsum0(object@anno@genome[chr, "size"], right = TRUE), 
-         col = "grey")
-  if (centromere) 
-    abline(v = .cumsum0(object@anno@genome[chr, "size"]) + object@anno@genome[chr, 
-                                                                              "pq"], col = "grey", lty = 2)
-  axis(1, at = .cumsum0(object@anno@genome[chr, "size"]) + object@anno@genome[chr, 
-                                                                              "size"]/2, labels = object@anno@genome[chr, "chr"], las = 2)
-  if (all(ylim == c(-1.25, 1.25))) {
-    axis(2, at = round(seq(-1.2, 1.2, 0.4), 1), las = 2)
-  } else {
-    axis(2, las = 2)
-  }
-  
-  # ratio
-  bin.ratio <- object@bin$ratio - object@bin$shift
-  bin.ratio[bin.ratio < ylim[1]] <- ylim[1]
-  bin.ratio[bin.ratio > ylim[2]] <- ylim[2]
-  bin.ratio.cols <- apply(colorRamp(cols)((bin.ratio + max(abs(ylim)))/(2 * 
-                                                                          max(abs(ylim)))), 1, function(x) rgb(x[1], x[2], x[3], maxColorValue = 255))
-  bin.ratio.cols[bin.ratio<0.1 & bin.ratio > -0.1]<-"#D3D3D3" 
-  lines(chr.cumsum0[as.vector(seqnames(object@anno@bins))] + values(object@anno@bins)$midpoint, 
-        bin.ratio, type = "p", pch = 16, cex = 0.75, col = bin.ratio.cols)
-  
-  for (i in seq(length(object@seg$summary$seg.median))) {
-    lines(c(object@seg$summary$loc.start[i] + chr.cumsum0[object@seg$summary$chrom[i]], 
-            object@seg$summary$loc.end[i] + chr.cumsum0[object@seg$summary$chrom[i]]), 
-          rep(min(ylim[2], max(ylim[1], object@seg$summary$seg.median[i])), 
-              2) - object@bin$shift, col = "darkblue", lwd = 2)
-  }
-  
-  # detail
-  if (detail & length(object@detail) > 0) {
-    detail.ratio <- object@detail$ratio - object@bin$shift
-    detail.ratio[detail.ratio < ylim[1]] <- ylim[1]
-    detail.ratio[detail.ratio > ylim[2]] <- ylim[2]
-    detail.ratio.above <- (detail.ratio > 0 & detail.ratio < 0.85) | 
-      detail.ratio < -0.85
-    
-    lines(start(object@anno@detail) + chr.cumsum0[as.vector(seqnames(object@anno@detail))], 
-          detail.ratio, type = "p", col = "darkblue", lwd = 2)
-    text(start(object@anno@detail) + chr.cumsum0[as.vector(seqnames(object@anno@detail))], 
-         ifelse(detail.ratio.above, detail.ratio, NA), labels = paste("  ", 
-                                                                      values(object@anno@detail)$name, sep = ""), adj = c(0, 
-                                                                                                                          0.5), srt = 90, col = "darkblue")
-    text(start(object@anno@detail) + chr.cumsum0[as.vector(seqnames(object@anno@detail))], 
-         ifelse(detail.ratio.above, NA, detail.ratio), labels = paste(values(object@anno@detail)$name, 
-                                                                      "  ", sep = ""), adj = c(1, 0.5), srt = 90, col = "darkblue")
-  }
-  if (set_par) 
-    par(mfrow = mfrow_original, mar = mar_original, oma = oma_original)
-})
-
-
-######
-setGeneric("CNV.genomeplot_new2", function(object, ...) {
-  standardGeneric("CNV.genomeplot_new2")
-})
-setMethod("CNV.genomeplot_new2", signature(object = "CNV.analysis"), function(object, 
+setMethod("CNV.genomeplot", signature(object = "CNV.analysis"), function(object, 
      chr = "all", chrX = TRUE, chrY = TRUE, centromere = TRUE, detail = TRUE, 
      main = NULL, ylim = c(-1.25, 1.25), set_par = TRUE, cols = c("red","red", 
      "lightgrey", "green", "green"),baseline.method="BAF") {
@@ -727,14 +495,16 @@ setMethod("CNV.genomeplot_new2", signature(object = "CNV.analysis"), function(ob
   }
   
   # ratio
-  bin.ratio<-object@bin$ratio                         #bin.ratio <- object@bin$ratio - object@bin$shift
+  bin.ratio<-object@bin$ratio                         
   bin.ratio[bin.ratio < ylim[1]] <- ylim[1]
   bin.ratio[bin.ratio > ylim[2]] <- ylim[2]
   
+  baseline.method=object@method.baseline.correction
 
 if (baseline.method=="BAF"){
    bin.ratio.cols<-rep("#D3D3D3",length(bin.ratio))
     for (i in seq(length(object@seg$summary$seg.median))) {
+      if (!is.nan(object@seg$summary$seg.median[i] )){
      if (object@seg$summary$seg.median[i] > 0.1) { 
        bin.ratio.cols[as.vector(seqnames(object@anno@bins))==object@seg$summary$chrom[i] & object@seg$summary$loc.start[i] < 
        values(object@anno@bins)$midpoint &object@seg$summary$loc.end[i] > values(object@anno@bins)$midpoint ]<-"#00ff00"
@@ -742,6 +512,7 @@ if (baseline.method=="BAF"){
        bin.ratio.cols[as.vector(seqnames(object@anno@bins))==object@seg$summary$chrom[i] & object@seg$summary$loc.start[i] <
        values(object@anno@bins)$midpoint &object@seg$summary$loc.end[i] > values(object@anno@bins)$midpoint ]<-"#ff0000"
      }
+    }
    }   
 }else{  
   bin.ratio.cols <- apply(colorRamp(cols)((bin.ratio + max(abs(ylim)))/(2 * 
@@ -756,12 +527,12 @@ if (baseline.method=="BAF"){
     lines(c(object@seg$summary$loc.start[i] + chr.cumsum0[object@seg$summary$chrom[i]], 
             object@seg$summary$loc.end[i] + chr.cumsum0[object@seg$summary$chrom[i]]), 
           rep(min(ylim[2], max(ylim[1], object@seg$summary$seg.median[i])), 
-              2) , col = "darkblue", lwd = 2)                                                     #  - object@bin$shift
+              2) , col = "darkblue", lwd = 2)                                                   
   }
   
   # detail
   if (detail & length(object@detail) > 0) {
-    detail.ratio<-object@detail$ratio                  #detail.ratio <- object@detail$ratio - object@bin$shift
+    detail.ratio<-object@detail$ratio                  
     detail.ratio[detail.ratio < ylim[1]] <- ylim[1]
     detail.ratio[detail.ratio > ylim[2]] <- ylim[2]
     detail.ratio.above <- (detail.ratio > 0 & detail.ratio < 0.85) | 
@@ -782,7 +553,6 @@ if (baseline.method=="BAF"){
     par(mfrow = mfrow_original, mar = mar_original, oma = oma_original)
 })
 
-i<-505
 
 
 
@@ -844,7 +614,7 @@ setMethod("CNV.genomeplot_vglGROUP", signature(object = "CNV.analysis"), functio
   }
   
   # ratio
-  bin.ratio <- object@bin$ratio - object@bin$shift
+  bin.ratio <- object@bin$ratio 
   bin.ratio[bin.ratio < ylim[1]] <- ylim[1]
   bin.ratio[bin.ratio > ylim[2]] <- ylim[2]
   
@@ -860,34 +630,6 @@ setMethod("CNV.genomeplot_vglGROUP", signature(object = "CNV.analysis"), functio
   }   
   
   
-  if (!is.na(diag.group)){
-    disjGROUP<-read.xlsx(paste0("/home/damian/sequencing/Projekte/CNV-test/predict/disj_",diag.group,".xlsx"))
-    
-    #bin.ratio.gain<-rep(NA,length(bin.ratio))
-    #bin.ratio.gain<-disjGROUP$gains[]
-    
-    bin.gain<-unlist(lapply(1:length(bin.ratio),function(i){
-      disjGROUP$gains[disjGROUP$seqnames==as.character(seqnames(object@anno@bins)[i]) & as.numeric(disjGROUP$start)<=values(object@anno@bins)$midpoint[i] & as.numeric(disjGROUP$end)>=values(object@anno@bins)$midpoint[i]]
-    } ))
-    bin.loss<-unlist(lapply(1:length(bin.ratio),function(i){
-      disjGROUP$loss[disjGROUP$seqnames==as.character(seqnames(object@anno@bins)[i]) & as.numeric(disjGROUP$start)<=values(object@anno@bins)$midpoint[i] & as.numeric(disjGROUP$end)>=values(object@anno@bins)$midpoint[i]]
-    } ))
-    bin.balanced<-unlist(lapply(1:length(bin.ratio),function(i){
-      disjGROUP$balanced[disjGROUP$seqnames==as.character(seqnames(object@anno@bins)[i]) & as.numeric(disjGROUP$start)<=values(object@anno@bins)$midpoint[i] & as.numeric(disjGROUP$end)>=values(object@anno@bins)$midpoint[i]]
-    } ))
-    
-    bin.ratio.cols<-unlist(lapply(1:length(bin.ratio.cols),function(i){
-      if (bin.ratio.cols[i]=="#D3D3D3" & bin.balanced[i]<20){"#000000"
-      }else if(bin.ratio.cols[i]=="#ff0000" & bin.loss[i]<20){"#ff00ff"
-      }else if(bin.ratio.cols[i]=="#00ff00" & bin.gain[i]<20){"#0000ff"
-      }else{bin.ratio.cols[i]}                       
-    }))
-  }
-  
-  
-  
-  
-  
   #bin.ratio.cols <- apply(colorRamp(cols)((bin.ratio + max(abs(ylim)))/(2 * 
   #                                                                        max(abs(ylim)))), 1, function(x) rgb(x[1], x[2], x[3], maxColorValue = 255))
   #bin.ratio.cols[bin.ratio<0.1 & bin.ratio > -0.1]<-"#D3D3D3" 
@@ -899,12 +641,12 @@ setMethod("CNV.genomeplot_vglGROUP", signature(object = "CNV.analysis"), functio
     lines(c(object@seg$summary$loc.start[i] + chr.cumsum0[object@seg$summary$chrom[i]], 
             object@seg$summary$loc.end[i] + chr.cumsum0[object@seg$summary$chrom[i]]), 
           rep(min(ylim[2], max(ylim[1], object@seg$summary$seg.median[i])), 
-              2) - object@bin$shift, col = "darkblue", lwd = 2)
+              2), col = "darkblue", lwd = 2)
   }
   
   # detail
   if (detail & length(object@detail) > 0) {
-    detail.ratio <- object@detail$ratio - object@bin$shift
+    detail.ratio <- object@detail$ratio
     detail.ratio[detail.ratio < ylim[1]] <- ylim[1]
     detail.ratio[detail.ratio > ylim[2]] <- ylim[2]
     detail.ratio.above <- (detail.ratio > 0 & detail.ratio < 0.85) | 

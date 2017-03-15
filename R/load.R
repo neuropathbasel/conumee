@@ -40,6 +40,38 @@ setMethod("CNV.load", signature(input = "MethylSet"), function(input, names = NU
     if (!is.null(names)) 
         names(object) <- names
     
+    
+    #Method for gender prediction (ex minfi and MNP)
+    MNPgetSex <- function(object = NULL, cutoff = -2){
+      #.myisGenomicOrStop(object)
+      #if(is(object, "GenomicMethylSet"))
+      #  CN <- getCN(object)
+      #if(is(object, "GenomicRatioSet"))
+      CN <- getCN(object)
+      ## FIXME: add test for logarithmic scale or non-log scale
+      xIndex <- which(as.logical(seqnames(object) == "chrX"))
+      yIndex <- which(as.logical(seqnames(object) == "chrY"))
+      out <- .mygetSex(CN = CN, xIndex = xIndex,
+                       yIndex = yIndex, cutoff = cutoff)
+      return(out)
+    }
+    .mygetSex <- function(CN = NULL, xIndex = NULL, yIndex = NULL, cutoff=-2) {
+      if(is.null(CN) | is.null(xIndex) | is.null(yIndex))
+        stop("must provide CN, xIndex, and yIndex")
+      ## FIXME: does not handle only females or only males
+      ## this ought to be handled by the 'centers' (see below) being too close together
+      xMed <- matrixStats::colMedians(CN, rows = xIndex, na.rm=TRUE)
+      yMed <- matrixStats::colMedians(CN, rows = yIndex, na.rm=TRUE)
+      dd <- yMed - xMed
+      sex0 <- ifelse(dd < cutoff, "F", "M")
+      df <- DataFrame(xMed = xMed, yMed = yMed, predictedSex = sex0)
+      rownames(df) <- colnames(CN)
+      df
+    }
+    
+    #Determine gender
+    object@gender<-MNPgetSex(minfi::mapToGenome(input))[1,3]
+    
     object <- CNV.check(object)
     
     return(object)
@@ -110,11 +142,21 @@ setMethod("CNV.load", signature(input = "numeric"), function(input, names = NULL
     return(object)
 })
 
+
+#' CNV.data.convert
+#' @description Convert old CNV.data to new CNV.data
+#' @param intensity
+#' @param BAFsnps
+#' @return \code{CNV.data} object.
+#' @details This method converts old CNV.data to new CNV.data.
+#' @author Damian Stichel \email{d.stichel@@dkfz.de}
+#' @author Daniel Schrimpf \email{d.schrimpf@@dkfz.de}
+#' @export
 setGeneric("CNV.data.convert", function(intensity, BAFsnps, ...) {
     standardGeneric("CNV.data.convert")
 })
 
-#' @rdname CNV.load
+#' @rdname CNV.data.convert
 setMethod("CNV.data.convert", signature(intensity = "data.frame", BAFsnps="data.frame"), function(intensity, BAFsnps) {
     object <- new("CNV.data")
     object@intensity<-intensity

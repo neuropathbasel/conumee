@@ -93,6 +93,7 @@ setMethod("CNV.fit", signature(query = "CNV.data", ref = "CNV.data", anno = "CNV
             na.rm = TRUE))
         
 	object@BAFsnps<-query@BAFsnps
+	object@gender<-query@gender
 
         return(object)
     })
@@ -260,7 +261,7 @@ NULL
 #' @author Damian Stichel \email{d.stichel@@dkfz.de}
 #' @export
 setGeneric("CNV.segment", function(object, ...) {
-    standardGeneric("CNV.segment_DS")
+    standardGeneric("CNV.segment")
 })
 
 setMethod("CNV.segment", signature(object = "CNV.analysis"), function(object, 
@@ -299,17 +300,35 @@ setMethod("CNV.segment", signature(object = "CNV.analysis"), function(object,
     object@seg$p <- DNAcopy::segments.p(x2)
     object@seg$p$chrom <- as.vector(object@seg$p$chrom)
     
+    object@seg$summary$chrom<-gsub("p","",object@seg$summary$chrom)
+    object@seg$summary$chrom<-gsub("q","",object@seg$summary$chrom)
+    
     return(object)
 })
 
 
 
-
-setGeneric("CNV.adjustbaseline", function(object, method.baseline.correction, ...) {
+#' @author Damian Stichel \email{d.stichel@dkfz.de}
+#' @author Daniel Schrimpf \email{d.schrimpf@dkfz.de}
+#' @export
+setGeneric("CNV.adjustbaseline", function(object, ...) {
   standardGeneric("CNV.adjustbaseline")
 })
 setMethod("CNV.adjustbaseline", signature(object = "CNV.analysis"), function(object, method.baseline.correction="BAF"){                                                                       
   
+  #out<-NA
+  #dnp.gr<-NA
+
+  if( !exists("method.baseline.correction")){
+    print("No method for baseline correction defined, using BAF (default). Options are 'MAD','MAXDENS','BAF'.")
+     method.baseline.correction<-"BAF"
+  }
+  
+  if( sum(is.na(object@BAFsnps$BAF))>50 & method.baseline.correction=="BAF"   ){
+    print("Intensity for SNP positions not available. Using 'MAD' as method for baseline estimation.")
+    method.baseline.correction<-"MAD"
+  }
+
   if (!method.baseline.correction%in%c("MAD","BAF","MAXDENS")){
     print("Selected method not available, using BAF (default). Options are 'MAD','MAXDENS','BAF'.")
     method.baseline.correction<-"BAF"
@@ -322,7 +341,7 @@ setMethod("CNV.adjustbaseline", signature(object = "CNV.analysis"), function(obj
         s), na.rm = TRUE), method = "Brent", lower = -100, upper = 100)$par
     
   }else{
-    x.histo <-hist(object@bin$ratio,breaks=seq(-20,20,by=0.01),xlim=c(-1,1),prob=TRUE,col="grey")     #,plot=FALSE
+    x.histo <-hist(object@bin$ratio,breaks=seq(-20,20,by=0.01),xlim=c(-1,1),prob=TRUE,col="grey",plot=FALSE,warn.unused=FALSE)     #,plot=FALSE
     x.density <- density(object@bin$ratio,n=1024,bw=0.025)
     
     if (method.baseline.correction=="MAXDENS"){
@@ -342,19 +361,7 @@ setMethod("CNV.adjustbaseline", signature(object = "CNV.analysis"), function(obj
       #Keep only peaks with density higher than cutoff
       out<-out[out$density>=0.1,]
       
-      ### Compute BAF (only 65 probes)
-      #BAFs=data.frame(V4=rownames(betas)[which(rownames(betas) %in% pos$V4)],BAF=betas[which(rownames(betas) %in% pos$V4)])
-      #BAFs<-as.data.frame(getSnpBeta(RGset))
-
-
       dnp.gr<-GRanges(object@BAFsnps$chrom, IRanges(object@BAFsnps$start, object@BAFsnps$end), names=object@BAFsnps$probe,BAF=object@BAFsnps$BAF)
-      
-      #### Merge BAFs to dnp.df, make sure to keep correct order   
-     # dnp.df<-object@BAFsnps
-
-      #for (ind in 1:nrow(dnp.df)){dnp.df$order[ind]<-ind}
-      #dnp.df<-merge(dnp.df,BAFs,by="V4",all.x=TRUE,sort=FALSE)                 
-      #dnp.df<-dnp.df[order(dnp.df$order),]
       
       seg.gr <- GRanges(object@seg$summary$chrom, IRanges(object@seg$summary$loc.start, object@seg$summary$loc.end), score=object@seg$summary$seg.median)
       df <-data.frame(xpos=sapply(as.list(findOverlaps(dnp.gr, seg.gr)), function(o) median(values(seg.gr)$score[o])),BAF=dnp.gr$BAF)
@@ -382,19 +389,13 @@ setMethod("CNV.adjustbaseline", signature(object = "CNV.analysis"), function(obj
       levels.to.delete<-c()
       for (j in 1:nrow(out)){
         if (length(table(df$level)[names(table(df$level))==j])>0 && (table(df$level)[names(table(df$level))==j]>5) ){
-          print(j)
+          #print(j)
         }else {  
-          print(paste0("Bad level: ", j))
           levels.to.delete<-c(levels.to.delete,j)}
       }
       if(!is.null(levels.to.delete)&length(levels.to.delete)<nrow(out)){
         df$level[which(df$level%in%levels.to.delete)]<-NA
         out<-out[-levels.to.delete,]}
-      
-      #if(isEmpty(which(df$level==1))) {df<-rbind(df,c(NA,NA,NA,1,1))}
-      #if(max(df$level)>=2 & isEmpty(which(df$level==2))) {df<-rbind(df,c(NA,NA,NA,2,2))}
-      #if(max(df$level)>=3 & isEmpty(which(df$level==3))) {df<-rbind(df,c(NA,NA,NA,3,3))}
-      #if(max(df$level)>=4 & isEmpty(which(df$level==4))) {df<-rbind(df,c(NA,NA,NA,4,4))}
       
       ###Transform BAFs to be between 0 and 0.5
       df$BAF.transf[df$BAF<0.5]<-df$BAF[df$BAF<0.5]
@@ -415,36 +416,199 @@ setMethod("CNV.adjustbaseline", signature(object = "CNV.analysis"), function(obj
       ##### k-means Clustering ####  
       out$CMP<-unlist(lapply(df.split,function(x){
         clust<- kmeans(x$BAF.transf,centers=2)
-        sort(clust$centers)[2]        #ClusterMittelPunkt von "oberem" Cluster ausgeben
+        sort(clust$centers)[2]        #midpoint of upper cluster
       })) 
       out$level.candidate<-ifelse(out$CMP>0.4,2,ifelse(out$CMP<0.3,1,3))
       out$level.candidate[which(out$score.abs<3)]<-0            #  NEGLECT LEVELS WITH score.abs<2
       
       
-      if ( length(which(out$level.candidate==2))==1 ) { shift_v3<-out$xpos[which(out$level.candidate==2)]    
-      } else if ( length(which(out$level.candidate==2))==0 ) {    ###wenn kein Candidat für Level 2, dann nach alter Methode
-        warning<-paste0(warning,"no candidate for level 2 detected")          
+      if ( length(which(out$level.candidate==2))==1 ) { shift<-out$xpos[which(out$level.candidate==2)]    
+      } else if ( length(which(out$level.candidate==2))==0 ) {    ###if no candidate for level 2, use old method
+        print("Warning: No candidate for level 2 detected")          
         if (out$score[1]>0.15&out$score.abs[1]>2){
           if(nrow(out)>1 &out$score.abs[1]<8 & out$score.abs[2]>8){
-            shift_v3<-out$xpos[2]
-          } else {shift_v3<-out$xpos[1]}
+            shift<-out$xpos[2]
+          } else {shift<-out$xpos[1]}
         }else{
           if(nrow(out)>2 &out$score.abs[2]<8 & out$score.abs[3]>8){
-            shift_v3<-out$xpos[3]
-          } else{shift_v3<-out$xpos[min(2,nrow(out))]}
+            shift<-out$xpos[3]
+          } else{shift<-out$xpos[min(2,nrow(out))]}
         }  
       } else{
-        warning<-paste0(warning,"more than 1 candidate for level 2 detected")
-        shift_v3<-min(out$xpos[which(out$level.candidate==2)])
+        print("Warning: More than 1 candidate for level 2 detected")
+        shift<-min(out$xpos[which(out$level.candidate==2)])
       }
       
-      object@bin$shift<-shift_v3
+      object@bin$shift<-shift
         
-	object@bin$out<-out
-	object@bin$dnp.df<-dnp.df
-	object@bin$dnp.gr<-dnp.gr
+	#object@bin$out<-out
+	#object@bin$dnp.gr<-dnp.gr
     }else print("ERROR: Selected method is not available.")
+    
+    object@bin$ratio<-log2((2^object@bin$ratio)+(1-2^object@bin$shift))
+    object@fit$ratio<-log2((2^object@fit$ratio)+(1-2^object@bin$shift))
+    object@bin$ratio[is.nan(object@bin$ratio)]<- -1.2
+    object@fit$ratio[is.nan(object@fit$ratio)]<- -1.2
+    object@detail$ratio<-log2((2^object@detail$ratio)+(1-2^object@bin$shift))
+    object@detail$ratio[is.nan(object@detail$ratio)]<- -1.2
+
+    object@seg$summary$seg.mean<-log2((2^object@seg$summary$seg.mean)+(1-2^object@bin$shift))
+    object@seg$summary$seg.sd<-log2((2^object@seg$summary$seg.sd)+(1-2^object@bin$shift))
+    object@seg$summary$seg.median<-log2((2^object@seg$summary$seg.median)+(1-2^object@bin$shift))
+    object@seg$summary$seg.mad<-log2((2^object@seg$summary$seg.mad)+(1-2^object@bin$shift))
+    object@seg$summary$seg.mean[is.nan(object@seg$summary$seg.mean)]<- -1.2
+    object@seg$summary$seg.sd[is.nan(object@seg$summary$seg.sd)]<- -1.2    
+    object@seg$summary$seg.median[is.nan(object@seg$summary$seg.median)]<- -1.2
+    object@seg$summary$seg.mad[is.nan(object@seg$summary$seg.mad)]<- -1.2
+    
     }
   return(object)
 })
+
+
+
+#' @author Damian Stichel \email{d.stichel@dkfz.de}
+#' @author Daniel Schrimpf \email{d.schrimpf@dkfz.de}
+#' @export
+setGeneric("CNV.evaluation", function(object, ...) {
+  standardGeneric("CNV.evaluation")
+})
+setMethod("CNV.evaluation", signature(object = "CNV.analysis"), function(object){                                                                       
+  
+  #Read information, which cpg belongs to which chromosome arm
+  data(cpg_chromosome_arms)
+  cpg_chromosome_armsM<-cpg_chromosome_arms
+  cpg_chromosome_armsF<-cpg_chromosome_arms[-which(cpg_chromosome_arms$Chromosome=="chrY"),]
+  
+  #Read information for chromosome_positions
+  data(chromosome_positions)
+  rownames(chromosome_positions)<-c("chr1","chr2","chr3","chr4","chr5","chr6","chr7","chr8","chr9","chr10","chr11","chr12","chr13","chr14","chr15","chr16","chr17","chr18","chr19","chr20","chr21","chr22","chrX","chrY")
+  #chromosome_positions$chromosome <-rownames(chromosome_positions)
+  chromosome_positionsM<-chromosome_positions
+  chromosome_positionsF<-chromosome_positions[1:(nrow(chromosome_positions)-1),]  #without Y-chrom
+  
+      
+      if(object@gender == "F") {
+        chromosome_positions<-chromosome_positionsF       #get rid of Y for females, keep it for m and nd
+        cpg_chromosome_arms<-cpg_chromosome_armsF
+      }else {
+        chromosome_positions<-chromosome_positionsM 
+        cpg_chromosome_arms<-cpg_chromosome_armsM
+      }
+      
+        #Data for probes
+        if (length(object@fit) == 0) 
+          stop("fit unavailable, run CNV.fit")
+           data <- data.frame(Chromosome = as.vector(seqnames(object@anno@probes)), 
+                        Start = start(object@anno@probes) - 1, End = end(object@anno@probes), 
+                        Feature = names(object@anno@probes), Value = round(object@fit$ratio, 3), row.names = NULL)
+        #colnames(data) <- sub("Value", object@name, colnames(data))
+  
+        colnames(data)<- sub("Value", "Intensity", colnames(data))
+        data <- merge(data,cpg_chromosome_arms[,4:5],by="Feature")
+        
+        #Split with respect to chromosome arms
+        data.pq <-split(data,data$pq)
+        
+        #Compute mean Intensity, sd, median                                      #oder log2(mean(as.numeric(2^x$Intensity),na.rm=TRUE))
+        out <-data.frame(Chromosome=names(data.pq),meanIntensity=unlist(lapply(data.pq,function(x){mean(as.numeric(x$Intensity),na.rm=TRUE)})) )
+        out$sd <-unlist(lapply(data.pq,function(x){sd(2^as.numeric(x$Intensity),na.rm=TRUE)}))
+        out$medianIntensity <-unlist(lapply(data.pq,function(x){median(as.numeric(x$Intensity),na.rm=TRUE)}))
+        
+        #max(as.numeric(data.pq$chr2p$Intensity))
+        #out$medianIntensity <- out$medianIntensity-1
+        
+        #Sort out
+        tmp <-gsub("chr","",out$Chromosome)
+        tmp <-gsub("p","",tmp)
+        tmp <-gsub("q","",tmp)
+        tmp <- as.numeric(tmp)
+        out <- out[order(tmp),]
+        
+        #Compute, if gain/loss/balanced
+        out$alteration <- ifelse(out$medianIntensity >=0.1,"gain",ifelse(out$medianIntensity <=-0.1,"loss","balanced"))
+        #out$type <- ifelse(out$medianIntensity <=-0.6,"homo-del",ifelse(out$medianIntensity <=-0.1,"loss",ifelse(out$medianIntensity >=0.4,"amp",ifelse(out$medianIntensity >=0.1,"gain","balanced"))))
+        
+        object@arms$summary<-out
+        
+        #GENES OF INTEREST
+        if (length(object@detail) == 0) 
+          stop("detail unavailable, run CNV.bin")
+           #     det <- data.frame(chr = as.vector(seqnames(object@anno@detail)), 
+            #            start = start(object@anno@detail), end = end(object@anno@detail), 
+             #           name = names(object@detail$probes), sample = object@name, probes = object@detail$probes, 
+              #          value = round(object@detail$ratio, 3), row.names = NULL)
+                                              
+        object@detail$alteration <- ifelse(object@detail$ratio >=0.1,"gain",ifelse(object@detail$ratio <=-0.1,"loss","balanced"))
+                                        # <- ifelse(det$value <=-0.4,"homo-del",ifelse(det$value <=-0.1,"loss",ifelse(det$value >=0.4,"amp",ifelse(det$value >=0.1,"gain","balanced"))))
+       
+        
+        
+        
+              
+        #############  Evaluate alterations for segments ##############
+        
+        #countsegments <- as.data.frame(table(segments$chrom))
+        #rownames(countsegments)<-countsegments$Var1
+        
+        # test <- apply(data[1:1000,],1,function(x){
+        #   tmp <- segments[grepl(paste("^",x["Chromosome"],"$", sep=""),segments$chrom),]
+        #   select <-  tmp[tmp$loc.start<=as.numeric(x["Start"]) & tmp$loc.end>=as.numeric(x["Start"]), ]
+        #   paste(select$chrom, ".", select$loc.start, ".", select$loc.end, sep="")
+        # })
+        # data$segment <- test
+        
+        if (length(object@seg) == 0) 
+          stop("seg unavailable, run CNV.bin")
+        # seg format, last numeric column is used in igv
+        segments <- data.frame(ID = object@name, chrom = object@seg$summary$chrom, 
+                        loc.start = object@seg$summary$loc.start, loc.end = object@seg$summary$loc.end, 
+                        num.mark = object@seg$summary$num.mark, bstat = object@seg$p$bstat, 
+                        pval = object@seg$p$pval, seg.mean = round(object@seg$summary$seg.mean
+                                 , 3), seg.median = round(object@seg$summary$seg.median, 3), row.names = NULL)
+        segments$segname <-paste(segments$chrom, ".", segments$loc.start, ".", segments$loc.end,sep="")
+        
+        object@seg$summary$alteration<- ifelse(object@seg$summary$seg.median >=0.1,"gain",ifelse(object@seg$summary$seg.median <=-0.1,"loss","balanced"))
+          # ... <- ifelse(out2$medianIntensity <=-0.4,"homo-del",ifelse(out2$medianIntensity <=-0.1,"loss",ifelse(out2$medianIntensity >=0.4,"amp",ifelse(out2$medianIntensity >=0.1,"gain","balanced"))))
+        
+        object@seg$summary$chrom.arm<-  ifelse({as.numeric(object@seg$summary$loc.start)<as.numeric(chromosome_positions[object@seg$summary$chrom,2])&as.numeric(object@seg$summary$loc.end)<as.numeric(chromosome_positions[object@seg$summary$chrom,2])}, paste(object@seg$summary$chrom,"p",sep=""),    ifelse({as.numeric(object@seg$summary$loc.start)>as.numeric(chromosome_positions[object@seg$summary$chrom,2])&as.numeric(object@seg$summary$loc.end)>as.numeric(chromosome_positions[object@seg$summary$chrom,2])},paste(object@seg$summary$chrom,"q",sep=""), object@seg$summary$chrom))
+        object@seg$summary$segment.length <- (as.numeric(object@seg$summary$loc.end)-as.numeric(object@seg$summary$loc.start))   #/1000000
+
+        #Keep Y only for male:
+        if (!object@gender=="M"&length(which(object@seg$summary$chrom %in% c("chrYp","chrYq","chrY")))>0){object@seg$summary<-object@seg$summary[-which(object@seg$summary$chrom %in% c("chrYp","chrYq","chrY")),]
+                                                                                                          object@seg$p<-object@seg$p[-which(object@seg$p$chrom %in% c("chrYp","chrYq","chrY")),]}
+        
+         #CHROMOTHRIPSIS:
+        if (length(which(table(object@seg$summary$chrom.arm)>9))>0){
+          vec<-which(table(object@seg$summary$chrom.arm)>9)
+          for (i in 1:length(vec)){
+            newrow<-object@seg$summary[which(object@seg$summar$chrom.arm==names(vec)[i])[1],]
+            newrow$loc.start<- NaN
+            newrow$loc.end<- NaN
+            newrow$num.mark<-NaN
+            newrow$seg.mean<-NaN
+            newrow$seg.median<-NaN
+            newrow$seg.mad<-NaN
+            newrow$alteration<-"chromothripsis"
+            newrow$segment.length<-NaN
+            object@seg$summary<-rbind(object@seg$summary,newrow)        
+            object@seg$p<-rbind(object@seg$p,rep(NA,10))  
+            #if Chromothripsis is found, change result for chr. arms:
+            object@arms$summary$alteration[which(object@arms$summary$Chromosome==names(vec[i]))]<-"chromothripsis"   
+          }
+        }
+        
+         #summary of total number of alteration
+         object@alteration.summary<-data.frame(object@name,alt_arm_tot=length(which(object@arms$summary$alteration=="loss"))+length(which(object@arms$summary$alteration=="gain")),alt_arm_gain=length(which(object@arms$summary$alteration=="gain")),alt_arm_loss=length(which(object@arms$summary$alteration=="loss")),
+                         alt_seg_tot=length(which(object@seg$summary$alteration=="loss"))+length(which(object@seg$summary$alteration=="gain")),alt_seg_gain=length(which(object@seg$summary$alteration=="gain")),alt_seg_loss=length(which(object@seg$summary$alteration=="loss")),
+                         alt_leng_tot=sum(object@seg$summary$segment.length[object@seg$summary$alteration=="gain"])+sum(object@seg$summary$segment.length[object@seg$summary$alteration=="loss"]),     #+sum(object@seg$summary$alteration$Segment_length[object@seg$summary$alteration$alteration=="amp"])+sum(object@seg$summary$alteration$Segment_length[object@seg$summary$alteration$alteration=="homo-del"]),
+                         alt_leng_gain=sum(object@seg$summary$segment.length[object@seg$summary$alteration=="gain"]),#+sum(object@seg$summary$segment.length[object@seg$summary$alteration=="amp"]),
+                         alt_leng_loss=sum(object@seg$summary$segment.length[object@seg$summary$alteration=="loss"])#+sum(object@seg$summary$segment.length[object@seg$summary$alteration=="homo-del"])
+                         )
+    
+return(object)
+})
+
+
+
 

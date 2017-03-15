@@ -64,7 +64,7 @@ setMethod("show", "CNV.anno", function(object) {
 #' d[1:2]
 #' @author Volker Hovestadt \email{conumee@@hovestadt.bio}
 #' @export
-setClass("CNV.data", representation(date = "character", intensity = "data.frame", BAFsnps="data.frame"))
+setClass("CNV.data", representation(date = "character", intensity = "data.frame", BAFsnps="data.frame",gender="character"))
 
 #' @rdname CNV.data-class
 #' @param object \code{CNV.data} object
@@ -149,7 +149,7 @@ setReplaceMethod("names", signature(x = "CNV.data"), function(x, value) {
 #' @author Volker Hovestadt \email{conumee@@hovestadt.bio}
 #' @export
 setClass("CNV.analysis", representation(name = "character", date = "character", 
-    anno = "CNV.anno", fit = "list", bin = "list", detail = "list", seg = "list",BAFsnps="data.frame",method.baseline.correction="character"))
+    anno = "CNV.anno", fit = "list", bin = "list", detail = "list", seg = "list",arms="list",alteration.summary="list", BAFsnps="data.frame",method.baseline.correction="character",gender="character"))
 
 #' @rdname CNV.analysis-class
 #' @param object \code{CNV.analysis} object
@@ -184,6 +184,12 @@ setMethod("show", "CNV.analysis", function(object) {
         cat("  @seg       : available (", nrow(object@seg$summary), " segments)\n", 
             sep = "")
     }
+    if (length(object@arms) == 0) {
+        cat("  @arms      : unavailable, run CNV.evaluation\n", sep = "")
+    } else {
+        cat("  @arms      : available (", nrow(object@arms$summary), " chromosome arms)\n", 
+          sep = "")
+    }
     if (length(object@BAFsnps) == 0) {
         cat("  @BAFsnps   : unavailable, run CNV.load with MethylSet as input\n", sep = "")
     } else {
@@ -193,6 +199,11 @@ setMethod("show", "CNV.analysis", function(object) {
         cat("  @baseline  : method unavailable, run CNV.adjustbaseline\n", sep = "")
     } else {
         cat("  @baseline  : method available (", object@method.baseline.correction, ")\n", sep = "")
+    }
+    if (length(object@gender) == 0) {
+        cat("  @gender    : unavailable\n", sep = "")
+    } else {
+        cat("  @gender    : ", object@gender, "\n", sep = "")
     }
 })
 
