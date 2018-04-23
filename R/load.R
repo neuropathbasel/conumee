@@ -14,23 +14,24 @@
 #' d
 #' @author Volker Hovestadt \email{conumee@@hovestadt.bio}
 #' @export
-setGeneric("CNV.load", function(input, ...) {
+setGeneric("CNV.load", function(input, BAFsnps, ...) {
     standardGeneric("CNV.load")
 })
 
 #' @rdname CNV.load
-setMethod("CNV.load", signature(input = "MethylSet"), function(input, names = NULL) {
+setMethod("CNV.load", signature(input = "MethylSet", BAFsnps="data.frame"), function(input, BAFsnps, names = NULL) {
+    message("Loading data")
     object <- new("CNV.data")
     methy.ba <- minfi::getMeth(input)
     unmethy.ba <- minfi::getUnmeth(input)
     object@intensity <- as.data.frame(methy.ba + unmethy.ba)
 
     data(BAFsnps_positions)
-
-    BAFsnps.names<-rownames(input)[grepl("rs",rownames(input))]
-
+    BAFsnps.names<-rownames(BAFsnps)
+    #BAFsnps.names<-rownames(input)[grepl("rs",rownames(input))]
+    
     #object@BAFsnps<-data.frame(probe=BAFsnps.names,BAF=methy.ba[rownames(betas)%in%BAFsnps.names] / (methy.ba[rownames(betas)%in%BAFsnps.names] +unmethy.ba[rownames(betas)%in%BAFsnps.names] +100))
-     object@BAFsnps<-data.frame(probe=BAFsnps_positions$probe,chrom=BAFsnps_positions$chrom,start=BAFsnps_positions$start,end=BAFsnps_positions$end,BAF=methy.ba[match(BAFsnps_positions$probe,rownames(methy.ba))] / (methy.ba[match(BAFsnps_positions$probe,rownames(methy.ba))] +unmethy.ba[match(BAFsnps_positions$probe,rownames(unmethy.ba))] +100)) 
+    object@BAFsnps<-data.frame(probe=BAFsnps_positions$probe,chrom=BAFsnps_positions$chrom,start=BAFsnps_positions$start,end=BAFsnps_positions$end,BAF=BAFsnps[match(BAFsnps_positions$probe,BAFsnps.names),] ) 
     
     input.names <- grep("Name", setdiff(colnames(minfi::pData(input)), 
         c("Basename", "filenames")), ignore.case = TRUE)
@@ -78,7 +79,7 @@ setMethod("CNV.load", signature(input = "MethylSet"), function(input, names = NU
 })
 
 #' @rdname CNV.load
-setMethod("CNV.load", signature(input = "data.frame"), function(input, 
+setMethod("CNV.load", signature(input = "data.frame", BAFsnps="data.frame"), function(input, BAFsnps,
     names = NULL) {
     object <- new("CNV.data")
     object@date <- date()
@@ -123,12 +124,12 @@ setMethod("CNV.load", signature(input = "data.frame"), function(input,
 })
 
 #' @rdname CNV.load
-setMethod("CNV.load", signature(input = "matrix"), function(input, names = NULL) {
+setMethod("CNV.load", signature(input = "matrix", BAFsnps="data.frame"), function(input, BAFsnps, names = NULL) {
     CNV.load(as.data.frame(input), anno, names)
 })
 
 #' @rdname CNV.load
-setMethod("CNV.load", signature(input = "numeric"), function(input, names = NULL) {
+setMethod("CNV.load", signature(input = "numeric", BAFsnps="data.frame"), function(input, BAFsnps, names = NULL) {
     object <- new("CNV.data")
     
     if (is.null(names(input))) 
@@ -157,7 +158,7 @@ setGeneric("CNV.data.convert", function(intensity, BAFsnps, ...) {
 })
 
 #' @rdname CNV.data.convert
-setMethod("CNV.data.convert", signature(intensity = "data.frame", BAFsnps="data.frame"), function(intensity, BAFsnps) {
+setMethod("CNV.data.convert", signature(intensity = "data.frame"), function(intensity) {
     object <- new("CNV.data")
     object@intensity<-intensity
     object@BAFsnps<-BAFsnps    

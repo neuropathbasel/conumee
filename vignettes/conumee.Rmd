@@ -1,6 +1,6 @@
 ---
-title: "The conumee vignette"
-author: "Volker Hovestadt, Marc Zapatka (Division of Molecular Genetics, German Cancer Research Center, Heidelberg, Germany)"
+title: "The conumee_alt_calling vignette"
+author: "Damian Stichel (Clinical Coopeartion Unit Neuropathology, German Cancer Research Center, Heidelberg, Germany)"
 date: "`r Sys.Date()`"
 output:
   BiocStyle::html_document:
@@ -15,6 +15,13 @@ vignette: >
 ---
 
 # Introduction
+
+This package is an extented version of the R package conumee by V.Hovestadt and M.Zapatka (##link) for the analysis of Illumina 450k or EPIC DNA methylation arrays. This version allowes for automated analyses of Copy-number alterations. To achieve an accurate calling, a new algorithm for baseline correction based on B-allele-frequencies of specific SNP is introduced. 
+
+# Process data
+
+Please see the vignette of the original conumee package for details.
+
 
 The `conumee` package provides tools for performing **co**py-**nu**mber variation (CNV) analysis using Illumina 450k or EPIC DNA **me**thylation arrays. Although the primary purpose of these arrays is the detection of genome-wide DNA methylation levels [@bibikovahigh2011], it can additionally be used to extract useful information about copy-number alterations, e.g. in clinical cancer samples. The approach was initially described in Sturm et al., 2012 [@sturmhotspot2012]. Other tools following a similar strategy include `ChAMP` and `CopyNumber450k` [@feberusing2014; @papilloncopynumber2013].
 

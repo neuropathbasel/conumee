@@ -57,7 +57,8 @@ setMethod("CNV.fit", signature(query = "CNV.data", ref = "CNV.data", anno = "CNV
         
         p <- names(anno@probes)  # ordered by location
         if (!all(is.element(p, rownames(query@intensity)))) 
-            stop("query intensities not given for all probes.")
+            #stop("query intensities not given for all probes.")
+            p<-p[-which(!is.element(p, rownames(query@intensity)))]
         if (!all(is.element(p, rownames(ref@intensity)))) 
             stop("reference set intensities not given for all probes.")
         
@@ -398,7 +399,7 @@ setMethod("CNV.adjustbaseline", signature(object = "CNV.analysis"), function(obj
         out<-out[-levels.to.delete,]}
       
       ###Transform BAFs to be between 0 and 0.5
-      df$BAF.transf[df$BAF<0.5]<-df$BAF[df$BAF<0.5]
+      df$BAF.transf[df$BAF<=0.5]<-df$BAF[df$BAF<=0.5]
       df$BAF.transf[df$BAF>0.5]<-abs(df$BAF[df$BAF>0.5]-1)
       
       #### Split with respect to intensity levels #####
@@ -499,9 +500,16 @@ setMethod("CNV.evaluation", signature(object = "CNV.analysis"), function(object)
         #Data for probes
         if (length(object@fit) == 0) 
           stop("fit unavailable, run CNV.fit")
-           data <- data.frame(Chromosome = as.vector(seqnames(object@anno@probes)), 
-                        Start = start(object@anno@probes) - 1, End = end(object@anno@probes), 
-                        Feature = names(object@anno@probes), Value = round(object@fit$ratio, 3), row.names = NULL)
+          # data <- data.frame(Chromosome = as.vector(seqnames(object@anno@probes)), 
+           #             Start = start(object@anno@probes) - 1, 
+            #            End = end(object@anno@probes), 
+             #           Feature = names(object@anno@probes),
+              #          Value = round(object@fit$ratio, 3), row.names = NULL)
+           data <- data.frame(Chromosome = as.vector(seqnames(object@anno@probes)[names(object@anno@probes)%in%names(object@fit$ratio)]), 
+                              Start = start(object@anno@probes)[names(object@anno@probes)%in%names(object@fit$ratio)] - 1, 
+                              End = end(object@anno@probes)[names(object@anno@probes)%in%names(object@fit$ratio)], 
+                              Feature = names(object@anno@probes)[names(object@anno@probes)%in%names(object@fit$ratio)],
+                              Value = round(object@fit$ratio, 3), row.names = NULL)
         #colnames(data) <- sub("Value", object@name, colnames(data))
   
         colnames(data)<- sub("Value", "Intensity", colnames(data))
@@ -509,36 +517,36 @@ setMethod("CNV.evaluation", signature(object = "CNV.analysis"), function(object)
         
         #Split with respect to chromosome arms
         data.pq <-split(data,data$pq)
-        
+
         #Compute mean Intensity, sd, median                                      #oder log2(mean(as.numeric(2^x$Intensity),na.rm=TRUE))
         out <-data.frame(Chromosome=names(data.pq),meanIntensity=unlist(lapply(data.pq,function(x){mean(as.numeric(x$Intensity),na.rm=TRUE)})) )
         out$sd <-unlist(lapply(data.pq,function(x){sd(2^as.numeric(x$Intensity),na.rm=TRUE)}))
         out$medianIntensity <-unlist(lapply(data.pq,function(x){median(as.numeric(x$Intensity),na.rm=TRUE)}))
-        
+
         #max(as.numeric(data.pq$chr2p$Intensity))
         #out$medianIntensity <- out$medianIntensity-1
-        
+
         #Sort out
         tmp <-gsub("chr","",out$Chromosome)
         tmp <-gsub("p","",tmp)
         tmp <-gsub("q","",tmp)
         tmp <- as.numeric(tmp)
         out <- out[order(tmp),]
-        
+
         #Compute, if gain/loss/balanced
         out$alteration <- ifelse(out$medianIntensity >=0.1,"gain",ifelse(out$medianIntensity <=-0.1,"loss","balanced"))
         #out$type <- ifelse(out$medianIntensity <=-0.6,"homo-del",ifelse(out$medianIntensity <=-0.1,"loss",ifelse(out$medianIntensity >=0.4,"amp",ifelse(out$medianIntensity >=0.1,"gain","balanced"))))
-        
+
         object@arms$summary<-out
-        
+
         #GENES OF INTEREST
-        if (length(object@detail) == 0) 
+        if (length(object@detail) == 0)
           stop("detail unavailable, run CNV.bin")
-           #     det <- data.frame(chr = as.vector(seqnames(object@anno@detail)), 
-            #            start = start(object@anno@detail), end = end(object@anno@detail), 
-             #           name = names(object@detail$probes), sample = object@name, probes = object@detail$probes, 
+           #     det <- data.frame(chr = as.vector(seqnames(object@anno@detail)),
+            #            start = start(object@anno@detail), end = end(object@anno@detail),
+             #           name = names(object@detail$probes), sample = object@name, probes = object@detail$probes,
               #          value = round(object@detail$ratio, 3), row.names = NULL)
-                                              
+
         object@detail$alteration <- ifelse(object@detail$ratio >=0.1,"gain",ifelse(object@detail$ratio <=-0.1,"loss","balanced"))
                                         # <- ifelse(det$value <=-0.4,"homo-del",ifelse(det$value <=-0.1,"loss",ifelse(det$value >=0.4,"amp",ifelse(det$value >=0.1,"gain","balanced"))))
        
@@ -606,6 +614,54 @@ setMethod("CNV.evaluation", signature(object = "CNV.analysis"), function(object)
                          alt_leng_loss=sum(object@seg$summary$segment.length[object@seg$summary$alteration=="loss"])#+sum(object@seg$summary$segment.length[object@seg$summary$alteration=="homo-del"])
                          )
     
+         seg.pq<-split(object@seg$summary,object@seg$summary$chrom.arm)
+         object@arms$summary <-data.frame(object@name,Chromosome=names(seg.pq),alteration=unlist(lapply(seg.pq,function(y){
+           if (length(unique(y$alteration))>1 ){
+             #alt<-sort(unique(y$alteration))
+             perc<-c(sum(y$segment.length[y$alteration=="balanced"])/sum(y$segment.length),
+                      sum(y$segment.length[y$alteration=="gain"])/sum(y$segment.length),
+                      sum(y$segment.length[y$alteration=="loss"])/sum(y$segment.length))
+             perc<-round(perc*100,digits=0)
+             #paste0("Segmental.changes:.",paste(sort(unique(y$alteration)),collapse="_"))
+             paste0("Segmental.changes:","bal(", perc[1],"%)_gain(",perc[2],"%)_loss(",perc[3],"%)")
+             }
+           else{paste(sort(unique(y$alteration)),collapse="_")}
+           #mean(as.numeric(x$Intensity),na.rm=TRUE)
+           })) )
+         
+         
+         # #Compute mean Intensity, sd, median                                      #oder log2(mean(as.numeric(2^x$Intensity),na.rm=TRUE))
+         # out <-data.frame(Chromosome=names(data.pq),meanIntensity=unlist(lapply(data.pq,function(x){mean(as.numeric(x$Intensity),na.rm=TRUE)})) )
+         # out$sd <-unlist(lapply(data.pq,function(x){sd(2^as.numeric(x$Intensity),na.rm=TRUE)}))
+         # out$medianIntensity <-unlist(lapply(data.pq,function(x){median(as.numeric(x$Intensity),na.rm=TRUE)}))
+         # 
+         # #max(as.numeric(data.pq$chr2p$Intensity))
+         # #out$medianIntensity <- out$medianIntensity-1
+         # 
+         # #Sort out
+         # tmp <-gsub("chr","",out$Chromosome)
+         # tmp <-gsub("p","",tmp)
+         # tmp <-gsub("q","",tmp)
+         # tmp <- as.numeric(tmp)
+         # out <- out[order(tmp),]
+         # 
+         # #Compute, if gain/loss/balanced
+         # out$alteration <- ifelse(out$medianIntensity >=0.1,"gain",ifelse(out$medianIntensity <=-0.1,"loss","balanced"))
+         # #out$type <- ifelse(out$medianIntensity <=-0.6,"homo-del",ifelse(out$medianIntensity <=-0.1,"loss",ifelse(out$medianIntensity >=0.4,"amp",ifelse(out$medianIntensity >=0.1,"gain","balanced"))))
+         # 
+         # object@arms$summary<-out
+         # 
+         # #GENES OF INTEREST
+         # if (length(object@detail) == 0) 
+         #   stop("detail unavailable, run CNV.bin")
+         #    #     det <- data.frame(chr = as.vector(seqnames(object@anno@detail)), 
+         #     #            start = start(object@anno@detail), end = end(object@anno@detail), 
+         #      #           name = names(object@detail$probes), sample = object@name, probes = object@detail$probes, 
+         #       #          value = round(object@detail$ratio, 3), row.names = NULL)
+         #         
+         
+         
+         
 return(object)
 })
 
