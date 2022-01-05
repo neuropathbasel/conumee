@@ -1,7 +1,7 @@
 UNDER CONSTRUCTION
 ================
 
-conumee package with additional baseline correction
+conumeeSummary package with additional baseline correction
 ================
 
 Enhanced copy-number variation analysis using Illumina DNA methylation arrays.
