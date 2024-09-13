@@ -9,10 +9,11 @@ Enhanced copy-number variation analysis using Illumina DNA methylation arrays, f
 In this version of the conumee package an additional step for baseline-correction based on BAF of SNPs is included, which allows for automated scoring of copy number alterations for genomic segments. The package can be installed using <br />
 
 ```
+# tested with R 4.0.3
 library(devtools)
 library(pastecs)
-install_github("neuropathbasel/conumeeSummary")
-library(conumeeSummary)
+install_github("neuropathbasel/conumeeSummary", force = TRUE) # adapted conumee package
+library(conumee) # loads the adapted conumee package
 
 # Calling of copy number alterations for one sample can be done using
 RGset <- read.metharray.exp(targets=...)
