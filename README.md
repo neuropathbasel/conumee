@@ -6,7 +6,7 @@ conumeeSummary package with additional baseline correction
 
 Enhanced copy-number variation analysis using Illumina DNA methylation arrays, forked from https://github.com/dstichel/conumee.
 
-In this version of the conumee package an additional step for baseline-correction based on BAF of SNPs is included, which allows for automated scoring of copy number alterations for genomic segments. The package can be installed using <br />
+In this version of the conumee package an additional step for baseline-correction based on BAF of SNPs is included, which allows for automated scoring of copy number alterations for genomic segments. The package can be installed and tested using <br />
 
 ```
 # tested with R 4.0.3
