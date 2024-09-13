@@ -30,3 +30,5 @@ CNV.write(x, what = "segments", file = paste(path, act.idat, ".BAF.segments.seg"
 ```
 
 Please see the vignette of the original conumee package (hovestadt/conumee) for more details on the method.
+
+In order to generate CN summary plots see https://github.com/neuropathbasel/CNsummaryplots .
